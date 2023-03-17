@@ -9,7 +9,7 @@ export const popupish = {
 
 export function PopupIsh() {
   return (
-    <>
+    <React.Fragment>
       <SnackbarQueue manager={popupish.snackbarManager} />
       <DialogQueue
         manager={popupish.dialogManager}
@@ -17,9 +17,8 @@ export function PopupIsh() {
           PaperProps: {
             sx: { verticalAlign: 'top' },
           },
-          // showHighlight: true,
         }}
       />
-    </>
+    </React.Fragment>
   );
 }

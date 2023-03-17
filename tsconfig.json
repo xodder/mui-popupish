@@ -3,6 +3,7 @@
     "target": "ES2015",
     "module": "esnext",
     "lib": ["esnext", "ES5", "DOM", "ES2015"],
+    "jsx": "react-jsx",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,

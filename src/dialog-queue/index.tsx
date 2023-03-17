@@ -1,31 +1,10 @@
-import {
-  Button,
-  ButtonProps,
-  Dialog,
-  DialogProps,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  TextField,
-  TextFieldProps,
-} from '@mui/material';
-import omit from 'lodash/omit';
+import { TextField, TextFieldProps } from '@mui/material';
 import React from 'react';
-import useRerender from '~/utils/use-rerender';
-import { ArrayEmitter, randomId } from '../utils';
-
-type SimpleDialogProps = DialogProps &
-  Partial<{
-    title: React.ReactNode;
-    header: React.ReactNode;
-    body: React.ReactNode;
-    footer: React.ReactNode;
-    acceptLabel: string | null;
-    cancelLabel: string | null;
-    acceptButtonProps: ButtonProps;
-    cancelButtonProps: ButtonProps;
-  }>;
+import EntryManager from '../utils/entry-manager';
+import omit from '../utils/omit';
+import randomId from '../utils/random-id';
+import useRerender from '../utils/use-rerender';
+import SimpleDialog, { SimpleDialogProps } from './simple-dialog';
 
 type DialogEvent = {
   detail: {
@@ -39,16 +18,16 @@ type PromptProps = MessageDialogProps & {
   inputProps: Omit<TextFieldProps, 'value' | 'onChange'>;
 };
 
-type Message = {
+type Entry<V = DialogEvent> = {
   id: string;
   props: MessageDialogProps | PromptProps;
-  resolve: (event: unknown) => void;
+  resolve: (value: V) => void;
   reject: (reason: string) => void;
 };
 
 type DialogQueueProps = {
-  manager: ArrayEmitter<Message>;
-  defaultProps?: Message['props'];
+  manager: EntryManager<Entry>;
+  defaultProps?: Entry['props'];
 };
 
 export function DialogQueue({ manager, defaultProps }: DialogQueueProps) {
@@ -63,77 +42,62 @@ export function DialogQueue({ manager, defaultProps }: DialogQueueProps) {
     };
   }, [manager, rerender]);
 
-  let foundOpen = false;
+  function handleDialogClose(event: DialogEvent, entry: Entry) {
+    setIsClosing({ ...isClosing, [entry.id]: true });
 
-  function handleDialogClose(event: unknown, message: Message) {
-    setIsClosing({
-      ...isClosing,
-      [message.id]: true,
-    });
-
-    message.resolve(event);
+    entry.resolve(event);
 
     setTimeout(() => {
-      manager.remove((x) => x.id === message.id); // maybe tell it not to trigger
-      setIsClosing((x) => omit(x, message.id));
+      manager.remove((x) => x.id === entry.id); // maybe tell it not to trigger
+      setIsClosing((x) => omit(x, entry.id));
     }, 150);
 
-    message.props?.onClose?.({}, 'backdropClick');
+    entry.props?.onClose?.(event as any, 'backdropClick');
   }
 
-  return (
-    <>
-      {manager.entries.map((message) => {
-        const { id, props } = message;
+  let foundOpen = false;
 
-        const renderedDialog = (
+  return (
+    <React.Fragment>
+      {manager.getEntries().map((entry) => {
+        const dialog = (
           <SimpleDialog
-            key={id}
+            key={entry.id}
             {...defaultProps}
-            {...props}
-            open={!isClosing[id] && !foundOpen}
-            onClose={(evt) => handleDialogClose(evt, message)}
+            {...entry.props}
+            open={!isClosing[entry.id] && !foundOpen}
+            onClose={(e) => handleDialogClose(e as any, entry)}
           />
         );
 
-        if (!isClosing[id]) {
-          foundOpen = true;
-        }
+        if (!isClosing[entry.id]) foundOpen = true;
 
-        return renderedDialog;
+        return dialog;
       })}
-    </>
+    </React.Fragment>
   );
 }
 
-// export function createDialogQueue(): {
-//   dialogManager: DialogQueueProps['manager'];
-//   alert: (props: DialogProps) => Promise<string>;
-//   confirm: (props: DialogProps) => Promise<boolean>;
-//   prompt: (props: PromptProps) => Promise<string>;
-// };
-
-/** Creates a snackbar queue */
 export function createDialogQueue() {
-  const manager = new ArrayEmitter<Message>();
+  const manager = new EntryManager<Entry>();
 
   return {
     dialogManager: manager,
-    alert: createDialogFactory(alertFactory, manager),
-    confirm: createDialogFactory(confirmFactory, manager),
-    prompt: createDialogFactory(promptFactory, manager),
+    alert: createDialogQueuePart(alertFactory, manager),
+    confirm: createDialogQueuePart(confirmFactory, manager),
+    prompt: createDialogQueuePart(promptFactory, manager),
   };
 }
 
-type MessageFactory = (message: Message) => Message;
+type EntryFactory<T = unknown> = (entry: Entry<T>) => Entry<DialogEvent>;
 
-function createDialogFactory(
-  factory: MessageFactory,
-  manager: ArrayEmitter<Message>
+function createDialogQueuePart<T>(
+  factory: EntryFactory<T>,
+  manager: EntryManager<Entry>
 ) {
-  return (props: Message['props']) => {
-    return new Promise(function (resolve, reject) {
-      manager.push(
+  return (props: Entry['props']) => {
+    return new Promise<T>(function (resolve, reject) {
+      manager.add(
         factory({
           id: randomId(),
           props,
@@ -145,27 +109,29 @@ function createDialogFactory(
   };
 }
 
-function promptFactory(message: Message): Message {
-  let getValue: (() => string) | undefined = () => '';
+type Maybe<T> = T | undefined;
+
+function promptFactory(entry: Entry<string | null>): Entry {
+  let getValue: Maybe<() => string> = undefined;
 
   const body = (
     <PromptBody
-      body={message.props.body}
-      inputProps={'inputProps' in message.props ? message.props.inputProps : {}}
+      body={entry.props.body}
+      inputProps={'inputProps' in entry.props ? entry.props.inputProps : {}}
       apiRef={(callback) => (getValue = callback)}
     />
   );
 
   return {
-    ...message,
+    ...entry,
     props: {
       title: 'Prompt',
-      ...message.props,
+      ...entry.props,
       body,
     },
-    resolve: function (event) {
-      const evt = event as DialogEvent;
-      message.resolve(evt.detail.action === 'accept' ? getValue?.() : null);
+    resolve: (e) => {
+      const value = getValue?.() || '';
+      entry.resolve(e.detail.action === 'accept' ? value : null);
       getValue = undefined;
     },
   };
@@ -198,113 +164,30 @@ function PromptBody({ body, inputProps, apiRef }: PromptBodyProps) {
   );
 }
 
-/** Alerts */
-function alertFactory(def: Message): Message {
+function alertFactory(entry: Entry<string>): Entry {
   return {
-    ...def,
+    ...entry,
     props: {
       title: 'Alert',
       body: 'You have been alerted!',
       acceptLabel: 'OK',
       cancelLabel: null,
-      ...def.props,
+      ...entry.props,
     },
-    resolve: function (event) {
-      const evt = event as DialogEvent;
-      return def.resolve(evt.detail.action);
-    },
+    resolve: (e) => entry.resolve(e.detail.action),
   };
 }
 
-/** Confirm */
-function confirmFactory(def: Message): Message {
+function confirmFactory(entry: Entry<boolean>): Entry {
   return {
-    ...def,
+    ...entry,
     props: {
       title: 'Confirm',
       body: 'Are you sure you want do that?',
       acceptLabel: 'OK',
       cancelLabel: 'Cancel',
-      ...def.props,
+      ...entry.props,
     },
-    resolve: function (event) {
-      const evt = event as DialogEvent;
-      return def.resolve(evt.detail.action === 'accept');
-    },
+    resolve: (e) => entry.resolve(e.detail.action === 'accept'),
   };
-}
-
-function SimpleDialog(props: SimpleDialogProps) {
-  const {
-    title,
-    header,
-    body,
-    footer,
-    acceptLabel = 'Accept',
-    cancelLabel = 'Cancel',
-    acceptButtonProps,
-    cancelButtonProps,
-    children,
-    open,
-    ...rest
-  } = props;
-
-  const content =
-    children || typeof body === 'string' ? (
-      <DialogContentText>{body}</DialogContentText>
-    ) : (
-      body
-    );
-
-  return (
-    <Dialog
-      open={open}
-      maxWidth="sm"
-      {...rest}
-      sx={{ zIndex: 2400, ...rest.sx }}
-      PaperProps={{
-        ...rest.PaperProps,
-        sx: { pt: 2, pb: 1, ...rest.PaperProps?.sx },
-      }}
-    >
-      {(!!title || !!header) && (
-        <DialogTitle sx={{ pb: 1 }}>{title || header}</DialogTitle>
-      )}
-      {!!content && <DialogContent>{content}</DialogContent>}
-      {(!!cancelLabel || !!acceptLabel || !!footer) && (
-        <DialogActions sx={{ px: 2 }}>
-          {footer}
-          {!!cancelLabel && (
-            <Button
-              color="inherit"
-              {...cancelButtonProps}
-              sx={{ color: 'text.secondary', ...cancelButtonProps }}
-              onClick={() =>
-                props.onClose?.(
-                  { detail: { action: 'close' } },
-                  'backdropClick'
-                )
-              }
-            >
-              {cancelLabel}
-            </Button>
-          )}
-          {!!acceptLabel && (
-            <Button
-              {...acceptButtonProps}
-              sx={{ fontWeight: 700, ...cancelButtonProps }}
-              onClick={() =>
-                props.onClose?.(
-                  { detail: { action: 'accept' } },
-                  'backdropClick'
-                )
-              }
-            >
-              {acceptLabel}
-            </Button>
-          )}
-        </DialogActions>
-      )}
-    </Dialog>
-  );
 }

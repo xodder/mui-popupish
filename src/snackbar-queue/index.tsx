@@ -1,37 +1,39 @@
-import { Snackbar, SnackbarProps } from '@mui/material';
+import { Snackbar, SnackbarProps as MuiSnackbarProps } from '@mui/material';
 import React from 'react';
-import useRerender from '~/utils/use-rerender';
-import { ArrayEmitter, randomId } from '../utils';
+import EntryManager from '../utils/entry-manager';
+import randomId from '../utils/random-id';
+import useRerender from '../utils/use-rerender';
 
-type OwnSnackbarProps = SnackbarProps & {
+type SnackbarProps = MuiSnackbarProps & {
   icon?: React.ReactNode;
 };
 
-type Message = {
+type Entry = {
   id: string;
-  props: OwnSnackbarProps;
+  props: SnackbarProps;
 };
 
 type SnackbarQueueProps = {
-  manager: ArrayEmitter<Message>;
-  defaultProps?: OwnSnackbarProps;
+  manager: EntryManager<Entry>;
+  defaultProps?: SnackbarProps;
 };
 
 export function SnackbarQueue({ manager, defaultProps }: SnackbarQueueProps) {
   const rerender = useRerender();
-  const [currentMessageDef, setCurrentMessageDef] = React.useState(
-    manager.entries[0]
-  );
+  const [currentEntry, setCurrentEntry] = React.useState(manager.get(0));
 
   React.useEffect(() => {
-    let timerId: number;
+    let timerId: ReturnType<typeof setTimeout>;
 
     function handleChange() {
-      if (currentMessageDef?.id !== manager.entries[0]?.id) {
+      const nextEntry = manager.get(0);
+      const needsUpdate = currentEntry?.id !== nextEntry?.id;
+
+      if (needsUpdate) {
         rerender();
 
-        timerId = window.setTimeout(() => {
-          setCurrentMessageDef(manager.entries[0]);
+        timerId = setTimeout(() => {
+          setCurrentEntry(nextEntry);
         }, 150);
       }
     }
@@ -42,26 +44,23 @@ export function SnackbarQueue({ manager, defaultProps }: SnackbarQueueProps) {
       clearTimeout(timerId);
       manager.off('change', handleChange);
     };
-  }, [currentMessageDef, manager, rerender]);
+  }, [currentEntry, manager, rerender]);
 
-  const { onClose, icon, message, ...props } = currentMessageDef?.props || {};
+  const open = currentEntry?.id === manager.get(0)?.id;
+  const props = currentEntry?.props || {};
+  const message = React.useMemo(() => {
+    const icon = props.icon || defaultProps?.icon;
 
-  let resolvedMessage: React.ReactNode = message;
+    if (!icon) return props.message;
 
-  const resolvedIcon = icon || defaultProps?.icon;
-
-  if (resolvedIcon) {
-    resolvedMessage = (
+    return (
       <div style={{ display: 'flex', alignItems: 'center' }}>
-        {resolvedIcon}
+        {icon}
         <div style={{ width: 16, flexShrink: 0 }} />
-        {message}
+        {props.message}
       </div>
     );
-  }
-
-  const open =
-    currentMessageDef && currentMessageDef?.id === manager.entries[0]?.id;
+  }, []);
 
   return (
     <Snackbar
@@ -69,35 +68,28 @@ export function SnackbarQueue({ manager, defaultProps }: SnackbarQueueProps) {
       {...defaultProps}
       {...props}
       open={open}
-      message={resolvedMessage}
+      message={message}
       onClose={(e, reason) => {
-        onClose && onClose(e, reason);
-        manager.remove(currentMessageDef);
+        props.onClose?.(e, reason);
+        manager.remove(currentEntry);
       }}
     />
   );
 }
 
 export const createSnackbarQueue = function () {
-  const manager = new ArrayEmitter<Message>();
+  const manager = new EntryManager<Entry>();
 
   return {
     snackbarManager: manager,
-    clearAll: () => {
-      manager.empty();
-    },
-    notify: function (props: OwnSnackbarProps) {
-      const messageDef = {
-        id: randomId(),
-        props,
-      };
+    clearAll: () => manager.clear(),
+    notify: (props: SnackbarProps) => {
+      const id = randomId();
 
-      manager.push(messageDef);
+      manager.add({ id, props });
 
       return {
-        close: function () {
-          manager.remove((x) => x.id === messageDef.id);
-        },
+        close: () => manager.remove((x) => x.id === id),
       };
     },
   };
