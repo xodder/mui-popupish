@@ -1,7 +1,7 @@
 {
-  "name": "knob",
+  "name": "@xod/mui-popupish",
   "version": "1.0.0",
-  "description": "Audio Knob UI component",
+  "description": "Imperative api for mui feedback-oriented ui",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -9,15 +9,15 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/xodder/knob.git"
+    "url": "git+https://github.com/xodder/mui-popuish.git"
   },
   "keywords": [],
   "author": "Stephen Odebiyi",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/xodder/knob/issues"
+    "url": "https://github.com/xodder/mui-popuish/issues"
   },
-  "homepage": "https://github.com/xodder/knob#readme",
+  "homepage": "https://github.com/xodder/mui-popuish#readme",
   "scripts": {
     "prepublish": "tsc",
     "lint": "eslint --ext .js,.ts,.tsx"
