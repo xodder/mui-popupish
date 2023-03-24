@@ -49,7 +49,7 @@ export function DialogQueue({ manager, defaultProps }: DialogQueueProps) {
 
     setTimeout(() => {
       manager.remove((x) => x.id === entry.id); // maybe tell it not to trigger
-      setIsClosing((x) => omit(x, entry.id));
+      setIsClosing((x) => omit(x, entry.id) || {});
     }, 150);
 
     entry.props?.onClose?.(event as any, 'backdropClick');
