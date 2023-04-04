@@ -46,7 +46,9 @@ export function SnackbarQueue({ manager, defaultProps }: SnackbarQueueProps) {
     };
   }, [currentEntry, manager, rerender]);
 
-  const open = currentEntry?.id === manager.get(0)?.id;
+  // TODO: rename to reflect actual meaning
+  const nextEntry = manager.get(0);
+  const open = currentEntry?.id === nextEntry?.id && !!currentEntry;
   const props = currentEntry?.props || {};
   const message = React.useMemo(() => {
     const icon = props.icon || defaultProps?.icon;
@@ -60,7 +62,7 @@ export function SnackbarQueue({ manager, defaultProps }: SnackbarQueueProps) {
         {props.message}
       </div>
     );
-  }, []);
+  }, [props?.icon, defaultProps?.icon, props?.message]);
 
   return (
     <Snackbar

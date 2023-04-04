@@ -23,26 +23,17 @@
     "lint": "eslint --ext .js,.ts,.tsx"
   },
   "peerDependencies": {
-    "@emotion/react": "^11.10.6",
-    "@emotion/styled": "^11.10.6",
-    "@mui/material": "^5.11.13",
-    "react": "^16.8.0 || ^17.0.0 || ^18.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@emotion/react": {
-      "optional": true
-    },
-    "@emotion/styled": {
-      "optional": true
-    }
+    "@mui/material": ">=5.11.13",
+    "react": "^16.8.0 || ^17.0.0"
   },
   "devDependencies": {
     "@types/node": "^18.15.3",
     "@types/react": "18.0.26",
     "@typescript-eslint/eslint-plugin": "^5.47.1",
     "@typescript-eslint/parser": "^5.47.1",
+    "@emotion/react": "^11.10.6",
+    "@emotion/styled": "^11.10.6",
     "eslint": "8.30.0",
-    "eslint-config-next": "13.1.0",
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-prettier": "^4.2.1",
     "prettier": "^2.8.1",
